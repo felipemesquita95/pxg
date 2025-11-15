@@ -37,6 +37,9 @@ ENV/
 tree_training_data/*.png
 tree_training_data/config.json
 
+# ROI Config (configuração de usuário)
+roi_config.json
+
 # OS
 .DS_Store
 Thumbs.db

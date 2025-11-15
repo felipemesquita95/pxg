@@ -65,14 +65,18 @@ class TreeDetector:
 
         return scaled
 
-    def _get_roi(self, screen_shape):
-        """Calcula ROI (Region of Interest) - região central da tela"""
+    def _get_roi(self, screen_shape, custom_roi=None):
+        """Calcula ROI (Region of Interest) - região central ou customizada"""
         if not USE_ROI:
             return None
 
+        # Usar ROI customizada se fornecida
+        if USE_CUSTOM_ROI and custom_roi:
+            return custom_roi
+
+        # Caso contrário, calcular área central automaticamente
         h, w = screen_shape[:2]
 
-        # Calcular área central
         pad_w = int(w * ROI_PADDING)
         pad_h = int(h * ROI_PADDING)
 
@@ -83,10 +87,10 @@ class TreeDetector:
 
         return (x1, y1, x2, y2)
 
-    def detect(self, screenshot_pil):
+    def detect(self, screenshot_pil, custom_roi=None):
         """
         Detecta árvores na screenshot - VERSÃO ULTRA OTIMIZADA
-        - ROI para processar só área central
+        - ROI para processar só área central ou customizada
         - Threading para processar templates em paralelo
         - Cache de templates preprocessados
         - NMS eficiente
@@ -98,8 +102,8 @@ class TreeDetector:
         screen_array = np.array(screenshot_pil)
         screen_gray = cv2.cvtColor(screen_array, cv2.COLOR_RGB2GRAY)
 
-        # Aplicar ROI
-        roi = self._get_roi(screen_gray.shape)
+        # Aplicar ROI (customizada ou automática)
+        roi = self._get_roi(screen_gray.shape, custom_roi)
         if roi:
             x1, y1, x2, y2 = roi
             screen_roi = screen_gray[y1:y2, x1:x2]

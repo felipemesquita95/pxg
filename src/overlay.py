@@ -8,6 +8,8 @@ from PIL import ImageGrab
 import keyboard
 import threading
 import time
+import json
+import os
 from src.config import *
 
 
@@ -19,9 +21,14 @@ class OverlayWindow:
 
         self.mode = 'idle'
         self.capturing = False
+        self.capturing_roi = False  # Modo de captura de ROI
         self.start_x = 0
         self.start_y = 0
         self.current_rect = None
+
+        # ROI customizada
+        self.custom_roi = None
+        self.load_custom_roi()  # Carregar ROI salva
 
         # Tkinter setup
         self.root = tk.Tk()
@@ -87,10 +94,18 @@ class OverlayWindow:
         print("="*60)
         print(f"NUMPAD [-] - Modo CAPTURA (marcar árvore)")
         print(f"NUMPAD [+] - Ativar/Pausar DETECÇÃO")
+        print(f"NUMPAD [/] - Definir ÁREA ROI (região de detecção)")
         print(f"NUMPAD [*] - SAIR")
         print(f"📚 Templates: {len(self.detector.templates)}")
         print(f"⚡ FPS Target: {FPS_TARGET}")
-        print(f"🎯 ROI: {'ATIVO' if USE_ROI else 'DESATIVADO'}")
+
+        if self.custom_roi:
+            x1, y1, x2, y2 = self.custom_roi
+            w, h = x2 - x1, y2 - y1
+            print(f"🎯 ROI Customizada: {w}x{h} px (salva)")
+        else:
+            print(f"🎯 ROI: {'AUTO' if USE_ROI else 'DESATIVADO'}")
+
         print(f"🚀 Threading: {'ATIVO' if USE_THREADING else 'DESATIVADO'}")
         print("="*60 + "\n")
 
@@ -98,7 +113,38 @@ class OverlayWindow:
         """Configura atalhos de teclado"""
         keyboard.add_hotkey(HOTKEY_CAPTURE, self.toggle_capture_mode)
         keyboard.add_hotkey(HOTKEY_DETECT, self.toggle_detection_mode)
+        keyboard.add_hotkey(HOTKEY_SET_ROI, self.toggle_roi_capture_mode)
         keyboard.add_hotkey(HOTKEY_QUIT, self.quit)
+
+    def load_custom_roi(self):
+        """Carrega ROI customizada do arquivo JSON"""
+        try:
+            if os.path.exists(CONFIG_FILE):
+                with open(CONFIG_FILE, 'r') as f:
+                    config = json.load(f)
+                    self.custom_roi = tuple(config.get('custom_roi', None))
+                    if self.custom_roi:
+                        print(f"✅ ROI customizada carregada: {self.custom_roi}")
+        except Exception as e:
+            print(f"⚠️ Erro ao carregar ROI: {e}")
+            self.custom_roi = None
+
+    def save_custom_roi(self):
+        """Salva ROI customizada no arquivo JSON"""
+        try:
+            config = {}
+            if os.path.exists(CONFIG_FILE):
+                with open(CONFIG_FILE, 'r') as f:
+                    config = json.load(f)
+
+            config['custom_roi'] = list(self.custom_roi) if self.custom_roi else None
+
+            with open(CONFIG_FILE, 'w') as f:
+                json.dump(config, f, indent=2)
+
+            print(f"💾 ROI customizada salva: {self.custom_roi}")
+        except Exception as e:
+            print(f"❌ Erro ao salvar ROI: {e}")
 
     def toggle_capture_mode(self):
         """Ativa/desativa modo captura"""
@@ -123,6 +169,31 @@ class OverlayWindow:
             )
 
             print("🎯 Modo CAPTURA ativado!")
+
+    def toggle_roi_capture_mode(self):
+        """Ativa/desativa modo captura de ROI"""
+        if self.mode == 'capturing_roi':
+            self.mode = 'idle'
+            self.root.attributes('-transparentcolor', 'white')
+            print("⏸️ Modo captura ROI DESATIVADO")
+        else:
+            self.mode = 'capturing_roi'
+            self.detecting = False
+            self.root.attributes('-transparentcolor', '')
+            self.canvas.delete('all')
+
+            # Recriar textos
+            self.status_text = self.canvas.create_text(
+                10, 10, text="", anchor='nw',
+                font=('Arial', 14, 'bold'), fill='yellow'
+            )
+            self.stats_text = self.canvas.create_text(
+                10, 100, text="", anchor='nw',
+                font=('Arial', FONT_SIZE, 'bold'), fill='yellow'
+            )
+
+            print("🎯 Modo CAPTURA ROI ativado!")
+            print("   Arraste um retângulo definindo a área de detecção")
 
     def toggle_detection_mode(self):
         """Ativa/desativa modo detecção"""
@@ -166,36 +237,48 @@ class OverlayWindow:
             self.canvas.delete('roi')
 
     def _draw_roi_indicator(self):
-        """Desenha indicador visual da ROI"""
+        """Desenha indicador visual da ROI (customizada ou automática)"""
         screen_width = self.root.winfo_screenwidth()
         screen_height = self.root.winfo_screenheight()
 
-        pad_w = int(screen_width * ROI_PADDING)
-        pad_h = int(screen_height * ROI_PADDING)
+        # Usar ROI customizada se existir
+        if self.custom_roi:
+            x1, y1, x2, y2 = self.custom_roi
+            roi_label = "🎯 ÁREA DE DETECÇÃO (ROI CUSTOMIZADA)"
+        else:
+            # ROI automática baseada em padding
+            pad_w = int(screen_width * ROI_PADDING)
+            pad_h = int(screen_height * ROI_PADDING)
 
-        x1 = pad_w
-        y1 = pad_h
-        x2 = screen_width - pad_w
-        y2 = screen_height - pad_h
+            x1 = pad_w
+            y1 = pad_h
+            x2 = screen_width - pad_w
+            y2 = screen_height - pad_h
+            roi_label = "🎯 ÁREA DE DETECÇÃO (ROI AUTOMÁTICA)"
 
         self.roi_rect = self.canvas.create_rectangle(
             x1, y1, x2, y2,
-            outline='cyan', width=2, dash=(5, 5), tags='roi'
+            outline=ROI_COLOR, width=2, dash=(5, 5), tags='roi'
         )
 
         # Texto explicativo
         self.canvas.create_text(
-            screen_width // 2, y1 - 20,
-            text="🎯 ÁREA DE DETECÇÃO (ROI)",
+            (x1 + x2) // 2, y1 - 20,
+            text=roi_label,
             font=('Arial', 12, 'bold'),
-            fill='cyan', tags='roi'
+            fill=ROI_COLOR, tags='roi'
         )
 
     def on_click(self, event):
-        """Mouse click - inicia captura"""
-        if self.mode != 'capturing':
+        """Mouse click - inicia captura (template ou ROI)"""
+        if self.mode not in ['capturing', 'capturing_roi']:
             return
-        self.capturing = True
+
+        if self.mode == 'capturing':
+            self.capturing = True
+        elif self.mode == 'capturing_roi':
+            self.capturing_roi = True
+
         self.start_x = event.x
         self.start_y = event.y
         if self.current_rect:
@@ -203,20 +286,23 @@ class OverlayWindow:
 
     def on_drag(self, event):
         """Mouse drag - desenha retângulo"""
-        if not self.capturing:
+        if not (self.capturing or self.capturing_roi):
             return
         if self.current_rect:
             self.canvas.delete(self.current_rect)
+
+        # Cor diferente para ROI
+        color = ROI_CAPTURE_COLOR if self.capturing_roi else CAPTURE_COLOR
+
         self.current_rect = self.canvas.create_rectangle(
             self.start_x, self.start_y, event.x, event.y,
-            outline=CAPTURE_COLOR, width=CAPTURE_WIDTH
+            outline=color, width=CAPTURE_WIDTH
         )
 
     def on_release(self, event):
-        """Mouse release - captura template"""
-        if not self.capturing:
+        """Mouse release - captura template ou ROI"""
+        if not (self.capturing or self.capturing_roi):
             return
-        self.capturing = False
 
         x1 = min(self.start_x, event.x)
         y1 = min(self.start_y, event.y)
@@ -226,26 +312,57 @@ class OverlayWindow:
         width = x2 - x1
         height = y2 - y1
 
-        if width < MIN_TEMPLATE_SIZE or height < MIN_TEMPLATE_SIZE:
-            print(f"❌ Região muito pequena! Mínimo: {MIN_TEMPLATE_SIZE}x{MIN_TEMPLATE_SIZE}")
+        # MODO: Captura de ROI
+        if self.capturing_roi:
+            self.capturing_roi = False
+
+            if width < 50 or height < 50:
+                print(f"❌ ROI muito pequena! Mínimo: 50x50")
+                self.canvas.delete(self.current_rect)
+                return
+
+            # Salvar ROI
+            self.custom_roi = (x1, y1, x2, y2)
+            self.save_custom_roi()
+
+            # Feedback visual
             self.canvas.delete(self.current_rect)
+            confirm_rect = self.canvas.create_rectangle(
+                x1, y1, x2, y2, outline='green', width=5
+            )
+            self.root.after(500, lambda: self.canvas.delete(confirm_rect))
+
+            print(f"✅ ROI definida: {width}x{height} px")
+            print(f"   Coordenadas: ({x1}, {y1}) → ({x2}, {y2})")
+
+            self.mode = 'idle'
+            self.root.attributes('-transparentcolor', 'white')
             return
 
-        # Capturar screenshot da região
-        screenshot = ImageGrab.grab(bbox=(x1, y1, x2, y2))
-        self.detector.add_template(screenshot)
+        # MODO: Captura de Template
+        if self.capturing:
+            self.capturing = False
 
-        # Feedback visual
-        self.canvas.delete(self.current_rect)
-        confirm_rect = self.canvas.create_rectangle(
-            x1, y1, x2, y2, outline='green', width=5
-        )
-        self.root.after(500, lambda: self.canvas.delete(confirm_rect))
+            if width < MIN_TEMPLATE_SIZE or height < MIN_TEMPLATE_SIZE:
+                print(f"❌ Região muito pequena! Mínimo: {MIN_TEMPLATE_SIZE}x{MIN_TEMPLATE_SIZE}")
+                self.canvas.delete(self.current_rect)
+                return
 
-        print(f"✅ Árvore capturada! Total: {len(self.detector.templates)}")
+            # Capturar screenshot da região
+            screenshot = ImageGrab.grab(bbox=(x1, y1, x2, y2))
+            self.detector.add_template(screenshot)
 
-        self.mode = 'idle'
-        self.root.attributes('-transparentcolor', 'white')
+            # Feedback visual
+            self.canvas.delete(self.current_rect)
+            confirm_rect = self.canvas.create_rectangle(
+                x1, y1, x2, y2, outline='green', width=5
+            )
+            self.root.after(500, lambda: self.canvas.delete(confirm_rect))
+
+            print(f"✅ Árvore capturada! Total: {len(self.detector.templates)}")
+
+            self.mode = 'idle'
+            self.root.attributes('-transparentcolor', 'white')
 
     def detection_loop(self):
         """Loop de detecção - ULTRA OTIMIZADO"""
@@ -257,7 +374,8 @@ class OverlayWindow:
                 screenshot = ImageGrab.grab()
 
                 # Detectar (processamento paralelo acontece aqui)
-                detections = self.detector.detect(screenshot)
+                # Passa custom_roi se existir
+                detections = self.detector.detect(screenshot, custom_roi=self.custom_roi)
 
                 # Calcular FPS
                 elapsed = time.time() - loop_start
@@ -329,17 +447,26 @@ class OverlayWindow:
         status_lines = []
 
         if self.mode == 'capturing':
-            status_lines.append("🎯 MODO CAPTURA")
+            status_lines.append("🎯 MODO CAPTURA ÁRVORE")
             status_lines.append("Arraste um quadrado")
+        elif self.mode == 'capturing_roi':
+            status_lines.append("📐 MODO CAPTURA ROI")
+            status_lines.append("Defina área de detecção")
         elif self.mode == 'detecting':
             status_lines.append("🔍 DETECTANDO...")
             status_lines.append(f"Templates: {len(self.detector.templates)}")
+            if self.custom_roi:
+                status_lines.append("ROI: Customizada")
         else:
             status_lines.append("⏸️ PAUSADO")
             status_lines.append(f"Templates: {len(self.detector.templates)}")
+            if self.custom_roi:
+                x1, y1, x2, y2 = self.custom_roi
+                w, h = x2 - x1, y2 - y1
+                status_lines.append(f"ROI: {w}x{h}px")
 
         status_lines.append("")
-        status_lines.append("[-]=Capturar | [+]=Detectar | [*]=Sair")
+        status_lines.append("[-]=Árvore | [+]=Detectar | [/]=ROI | [*]=Sair")
 
         self.canvas.itemconfig(self.status_text, text="\n".join(status_lines))
         self.root.after(100, self.update_status)
