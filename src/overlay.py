@@ -155,7 +155,12 @@ class OverlayWindow:
             print("⏸️ Modo captura DESATIVADO")
         else:
             self.mode = 'capturing'
-            self.detecting = False
+            self.detecting = False  # Pausa detecção
+
+            # Limpar todos os quadros (detecções, ROI, etc)
+            self.canvas.delete('detection')
+            self.canvas.delete('roi')
+
             self.root.attributes('-transparentcolor', '')
             self.canvas.delete('all')
 
@@ -170,6 +175,7 @@ class OverlayWindow:
             )
 
             print("🎯 Modo CAPTURA ativado!")
+            print("   Quadros de detecção limpos")
 
     def toggle_roi_capture_mode(self):
         """Ativa/desativa modo captura de ROI"""
@@ -179,7 +185,12 @@ class OverlayWindow:
             print("⏸️ Modo captura ROI DESATIVADO")
         else:
             self.mode = 'capturing_roi'
-            self.detecting = False
+            self.detecting = False  # Pausa detecção
+
+            # Limpar todos os quadros (detecções, ROI, etc)
+            self.canvas.delete('detection')
+            self.canvas.delete('roi')
+
             self.root.attributes('-transparentcolor', '')
             self.canvas.delete('all')
 
@@ -195,6 +206,7 @@ class OverlayWindow:
 
             print("🎯 Modo CAPTURA ROI ativado!")
             print("   Arraste um retângulo definindo a área de detecção")
+            print("   Quadros de detecção limpos")
 
     def toggle_detection_mode(self):
         """Ativa/desativa modo detecção"""
