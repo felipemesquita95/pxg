@@ -35,8 +35,8 @@ ROI_COLOR = 'cyan'  # Cor da área ROI
 ROI_CAPTURE_COLOR = 'yellow'  # Cor ao capturar ROI
 FONT_SIZE = 12
 
-# HOTKEYS (numpad)
+# HOTKEYS
 HOTKEY_CAPTURE = 'subtract'  # NUMPAD [-] - Capturar template de árvore
 HOTKEY_DETECT = 'add'        # NUMPAD [+] - Ativar/Pausar detecção
-HOTKEY_SET_ROI = 'divide'    # NUMPAD [/] - Definir área ROI customizada
+HOTKEY_SET_ROI = 'end'       # END - Definir área ROI customizada
 HOTKEY_QUIT = '*'            # NUMPAD [*] - Sair

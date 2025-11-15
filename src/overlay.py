@@ -94,7 +94,7 @@ class OverlayWindow:
         print("="*60)
         print(f"NUMPAD [-] - Modo CAPTURA (marcar árvore)")
         print(f"NUMPAD [+] - Ativar/Pausar DETECÇÃO")
-        print(f"NUMPAD [/] - Definir ÁREA ROI (região de detecção)")
+        print(f"END - Definir ÁREA ROI (região de detecção)")
         print(f"NUMPAD [*] - SAIR")
         print(f"📚 Templates: {len(self.detector.templates)}")
         print(f"⚡ FPS Target: {FPS_TARGET}")
@@ -466,7 +466,7 @@ class OverlayWindow:
                 status_lines.append(f"ROI: {w}x{h}px")
 
         status_lines.append("")
-        status_lines.append("[-]=Árvore | [+]=Detectar | [/]=ROI | [*]=Sair")
+        status_lines.append("[-]=Árvore | [+]=Detectar | END=ROI | [*]=Sair")
 
         self.canvas.itemconfig(self.status_text, text="\n".join(status_lines))
         self.root.after(100, self.update_status)
