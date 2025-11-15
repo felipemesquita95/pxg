@@ -1,0 +1,13 @@
+# Sistema de Detecção de Árvores PXG - Dependências
+
+# Visão computacional
+opencv-python>=4.8.0
+numpy>=1.24.0
+
+# Captura de tela e automação
+Pillow>=10.0.0
+pyautogui>=0.9.54
+keyboard>=0.13.5
+
+# Interface gráfica (geralmente já vem com Python)
+# tkinter - built-in no Python
