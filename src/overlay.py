@@ -10,6 +10,7 @@ import threading
 import time
 import json
 import os
+import winsound  # Para tocar som no Windows
 from src.config import *
 
 
@@ -401,37 +402,64 @@ class OverlayWindow:
                 time.sleep(0.5)
 
     def draw_detections(self, detections):
-        """Desenha retângulos nas detecções"""
+        """Desenha retângulos nas detecções (apenas 80%+ confiança)"""
         self.canvas.delete('detection')
 
-        for det in detections:
+        # Filtrar apenas detecções com 80%+ de confiança
+        high_confidence_detections = [d for d in detections if d['confidence'] >= DISPLAY_THRESHOLD]
+
+        # Tocar som se encontrou algo com alta confiança
+        if high_confidence_detections and PLAY_SOUND_ON_DETECTION:
+            try:
+                # Beep curto: frequência 1000Hz, duração 100ms
+                threading.Thread(target=lambda: winsound.Beep(1000, 100), daemon=True).start()
+            except:
+                pass  # Ignora erro se não conseguir tocar som
+
+        for det in high_confidence_detections:
             x, y, w, h = det['x'], det['y'], det['w'], det['h']
             conf = det['confidence']
 
-            # Retângulo
+            # Retângulo preenchido semi-transparente (fundo)
+            # Nota: Canvas não suporta alpha em fill, então desenhamos só outline grosso
+
+            # Retângulo externo (grosso e forte)
             self.canvas.create_rectangle(
                 x, y, x + w, y + h,
                 outline=DETECTION_COLOR, width=DETECTION_WIDTH, tags='detection'
             )
 
-            # Label com confiança
-            self.canvas.create_text(
-                x, y - 10, text=f"🌳 {conf:.0%}",
-                anchor='sw', font=('Arial', FONT_SIZE, 'bold'),
-                fill=DETECTION_COLOR, tags='detection'
+            # Retângulo interno para dar efeito de destaque
+            self.canvas.create_rectangle(
+                x + 2, y + 2, x + w - 2, y + h - 2,
+                outline=DETECTION_COLOR, width=2, tags='detection'
             )
 
-        # Atualizar contadores
-        if detections:
-            self.detection_count = len(detections)
-            self.total_detections += len(detections)
+            # Label com confiança (mais visível)
+            # Fundo do texto
+            self.canvas.create_rectangle(
+                x, y - 25, x + 100, y - 5,
+                fill='black', outline='', tags='detection'
+            )
+
+            # Texto com confiança
+            self.canvas.create_text(
+                x + 5, y - 15, text=f"🌳 {conf:.0%}",
+                anchor='w', font=('Arial', FONT_SIZE, 'bold'),
+                fill='#FF0000', tags='detection'
+            )
+
+        # Atualizar contadores (contar só as de alta confiança)
+        if high_confidence_detections:
+            self.detection_count = len(high_confidence_detections)
+            self.total_detections += len(high_confidence_detections)
 
         # Atualizar stats
         avg_fps = self._get_avg_fps()
         self.canvas.itemconfig(
             self.stats_text,
             text=f"FPS: {self.fps:.1f} (avg: {avg_fps:.1f})\n"
-                 f"Detecções agora: {self.detection_count}\n"
+                 f"Detecções 80%+: {self.detection_count}\n"
                  f"Total sessão: {self.total_detections}"
         )
 
